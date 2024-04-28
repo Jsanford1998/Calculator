@@ -1,0 +1,376 @@
+/*
+Calculator program implementing the
+Shunting Yard Algorithm to convert an
+input expression to postfix notation
+before resolving the expression.
+
+Does not support negative value input eg. "-1".
+instead input negatives in the format "(0-1)".
+
+Does not support exponent input eg "(2)^2".
+instead input exponents in the format "(2)*(2)".
+*/
+
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define STACK_SIZE 100
+#define MAX_EXPRESSION_LENGTH 50
+#define OUTPUT_STACK 0x1
+#define OPERATOR_STACK 0x2
+#define SOLUTION_STACK 0x3
+#define DEBUG 0
+
+void push(int, void*);
+void pop(int);
+char* pGetConstOperator(char*);
+void operatorSwitch(char);
+void parseLeadingOperators();
+int bufferNextOperator();
+void getNextToken();
+void printOutputQueue();
+int convertExpression();
+double resolvePostfix();
+void getInput();
+int menu();
+
+int operator_top;
+int output_top;
+int soln_top;
+double soln;
+double solnStack[STACK_SIZE];
+char expression[MAX_EXPRESSION_LENGTH];
+char* operatorStack[STACK_SIZE];
+char* outputQueue[STACK_SIZE];
+char delimeters[] = "+-*/()^";
+char* parsePoint;
+char* token = NULL;
+char* operator = NULL;
+char* operator_location = NULL;
+char* ADD = "+";
+char* SUB = "-";
+char* MUL = "*";
+char* DIV = "/";
+char* OPP = "(";
+char* CLP = ")";
+
+//////////////////////////////////////////////////
+int main()                            		
+{     						
+	while(menu())				
+	{					
+		getInput();			
+		convertExpression();		
+		printOutputQueue();		
+		soln = resolvePostfix();	
+		printf("= %f\n", soln);         
+	}					
+	return 0;				
+}						
+//////////////////////////////////////////////////
+
+/*Pushes the data pointed to by data to the specified stack*/
+void push(int stack, void* data)
+{
+	switch (stack)
+	{
+		case OUTPUT_STACK:
+		{
+			if(output_top==STACK_SIZE-1)
+			{
+				printf("Stack Overflow in outputQueue\n");
+				break;
+			}
+			outputQueue[++output_top] = (char*) data;
+			break;
+		}
+		case OPERATOR_STACK:
+		{
+			if(operator_top==STACK_SIZE-1)
+			{
+				printf("Stack Overflow in operatorStack\n");
+				break;
+			}
+			operatorStack[++operator_top] = (char*) data;
+			break;
+		}
+		case SOLUTION_STACK:
+		{
+			if(soln_top==STACK_SIZE-1)
+			{
+				printf("Stack Overflow in operatorStack\n");
+				break;
+			}
+			solnStack[++soln_top] = *(double*) data;
+			break;
+		}
+	}
+}
+
+/*Pops the top of the specified stack*/
+void pop(int stack)
+{
+	switch (stack)
+	{
+		case OPERATOR_STACK:
+		{
+			if(operator_top==-1)
+			{
+				printf("Stack Underflow in operatorStack\n");
+				break;
+			}
+			operatorStack[operator_top] = NULL;
+			operator_top--;
+			break;
+		}
+		case SOLUTION_STACK:
+		{
+			if(soln_top==-1)
+			{
+				printf("Stack Underflow in solnStack\n");
+				break;
+			}
+			solnStack[soln_top] = 0;
+			soln_top--;
+			break;
+		}
+	}
+}
+
+/*Takes the location of an operator in expression[] to return  */
+/*a reference to a const char* containing the matching operator*/
+char* pGetConstOperator(char* p)
+{
+	switch (*p)
+	{
+		case '+': return ADD;
+		case '-': return SUB;
+		case '*': return MUL;
+		case '/': return DIV;
+		case '(': return OPP;
+		case ')': return CLP;
+	}
+}
+
+/*Called to identify an operator, tailoring the code executed*/
+/*to implement the oprder of operations                      */
+void operatorSwitch(char c)
+{
+	switch (c)
+	{
+		case '+':
+		{
+			while(operatorStack[operator_top] == MUL || operatorStack[operator_top] == DIV)
+			{
+				push(OUTPUT_STACK, operatorStack[operator_top]);
+				pop(OPERATOR_STACK);
+			}
+			push(OPERATOR_STACK, operator);
+			break;
+		}
+		case '-':
+		{
+			while(operatorStack[operator_top] == MUL || operatorStack[operator_top] == DIV)
+			{
+				push(OUTPUT_STACK, operatorStack[operator_top]);
+				pop(OPERATOR_STACK);
+			}
+			push(OPERATOR_STACK, operator);
+			break;
+			}
+		case '*':
+		{
+			push(OPERATOR_STACK, operator);
+			break;
+		}
+		case '/':
+		{
+			push(OPERATOR_STACK, operator);
+			break;
+		}
+		case '(':
+		{
+			push(OPERATOR_STACK, operator);
+			break;
+		}
+		case ')':
+		{	
+			while(operatorStack[operator_top] != OPP)
+			{
+				if(operator_top < 0){printf("SYNTAX ERROR\n"); break;}
+				push(OUTPUT_STACK, operatorStack[operator_top]);
+				pop(OPERATOR_STACK);
+			}
+			pop(OPERATOR_STACK);
+			break;
+		}
+		default: break;
+	}
+}
+
+/*Checks how many operators directly follow the parsePoint*/
+/*Counting them into "ops" to be processed before the next*/
+/*strtok() call .                                         */
+void parseLeadingOperators()
+{
+	int ops = 0;
+	ops = strspn(parsePoint, delimeters);
+	int x = ops;
+	while(ops>0)
+	{
+		operator_location = parsePoint + (x - ops);
+		operator = pGetConstOperator(operator_location);
+		operatorSwitch(*operator);
+		ops--;
+	}
+	parsePoint += x;
+}
+
+/*Buffers the next operator before calling strtok()*/
+/*which discards it as a delimeter                 */
+int bufferNextOperator()
+{
+	operator_location = strpbrk(parsePoint, delimeters);
+	if(operator_location != NULL)
+	{
+		operator = pGetConstOperator(operator_location);
+		parsePoint = operator_location + 1;
+	}
+	else 
+	{
+		operator = NULL;
+		parsePoint = NULL;
+	}
+	return (operator != NULL);
+}
+
+/*Gets the next operand as a token using strtok()*/
+void getNextToken()
+{
+	token = strtok(NULL, delimeters);
+}
+
+/*Converts the input expression from infix notation to postfix   */
+/*reading from expression[] tokenizing all operators and operands*/
+/*into the output queue. Implements the Shunting Yard Algorithm  */
+int convertExpression()
+{	
+	operator_top = -1;
+	output_top = -1;
+	parsePoint = &expression[0];
+	parseLeadingOperators();
+	bufferNextOperator();
+	parsePoint = operator_location + 1;
+	token = strtok(expression, delimeters);
+	if(token != NULL) 
+		push(OUTPUT_STACK, token);
+	if(operator != NULL)
+		operatorSwitch(*operator);
+	if(operator_location != NULL) 
+	do
+	{
+		parseLeadingOperators();
+		bufferNextOperator();
+		getNextToken();
+		if(token != NULL) 
+		{
+			push(OUTPUT_STACK, token);
+		}	
+		if(operator_location != NULL) 
+			parsePoint = operator_location + 1;
+		if(operator != NULL)operatorSwitch(*operator);
+	}while(parsePoint != NULL);
+
+	while(operator_top >= 0)
+	{
+		push(OUTPUT_STACK, operatorStack[operator_top]);
+		pop(OPERATOR_STACK);
+	}
+	return 0;
+}
+
+/*Prints the contents of the outputQueue in a formatted list*/
+void printOutputQueue()
+{
+	for(int i = 0; i <= output_top; i++)
+	{
+		printf("|%s|", outputQueue[i]);
+	}
+printf("\n");
+}
+
+/*Resolves the postfix expression, reading it from the outputQueue*/
+double resolvePostfix()
+{	
+	soln_top = -1;
+	int i = 0;
+	double* ptr;
+	while(i <= output_top)
+	{
+		if(strpbrk(outputQueue[i], delimeters) == NULL)
+		{
+			*ptr = atof(outputQueue[i]);
+			push(SOLUTION_STACK, ptr);
+			i++;
+		}
+		else
+		{
+			switch ((char) *outputQueue[i])
+			{
+				case '+':
+				{
+					*ptr = (solnStack[soln_top-1] + solnStack[soln_top]);
+					pop(SOLUTION_STACK);
+					pop(SOLUTION_STACK);
+					push(SOLUTION_STACK, ptr);
+					break;
+				}
+				case '-':
+				{
+					*ptr = (solnStack[soln_top-1] - solnStack[soln_top]);
+					pop(SOLUTION_STACK);
+					pop(SOLUTION_STACK);
+					push(SOLUTION_STACK, ptr);
+					break;
+				}
+				case '*':
+				{
+					*ptr = (solnStack[soln_top-1] * solnStack[soln_top]);
+					pop(SOLUTION_STACK);
+					pop(SOLUTION_STACK);
+					push(SOLUTION_STACK, ptr);
+					break;
+				}
+				case '/':
+				{
+					*ptr = (solnStack[soln_top-1] / solnStack[soln_top]);
+					pop(SOLUTION_STACK);
+					pop(SOLUTION_STACK);
+					push(SOLUTION_STACK, ptr);
+					break;
+				}
+			}
+			i++;
+		}
+	}
+	return solnStack[0];
+}
+
+/*Prompts the user to input an expression, storing it in expression[]*/
+void getInput()
+{
+//scans input from user to expression[]
+	printf("Enter Expresssion:\n");
+	scanf("%s", &expression);
+}
+
+/*Prompts the user to intput a value. Capable of terminating the program*/
+int menu()
+{
+//returns 1 or 0 based on input
+	int i;
+	printf("[1][enter]\n[0][exit]\n");
+	scanf("%d", &i);
+	return i;
+}
